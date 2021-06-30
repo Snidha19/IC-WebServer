@@ -5,7 +5,7 @@ from time import sleep
 #=======================================
 
 myhost = 'localhost'
-myport = 80
+myport = 12345
 
 #=======================================
 

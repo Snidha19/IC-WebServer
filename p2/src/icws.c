@@ -1,4 +1,5 @@
 #include<sys/types.h>
+#include <ctype.h>
 #include<sys/socket.h>
 #include<sys/stat.h>
 #include<netdb.h>
@@ -13,47 +14,61 @@
 
 #define MAXBUF 8192
 
+#define DEFAULT_MIME_TYPE "application/octet-stream"
+
 typedef struct sockaddr SA;
 
-char* setMimeType(char *uri){
-    // char tmpUri[MAXBUF];
-    // strcpy(tmpUri, uri);
+char *strlower(char *s)
+{
+    for (char *p = s; *p != '\0'; p++) {
+        *p = tolower(*p);
+    }
 
-    char *mimeType = malloc(30);
-    char *extension;
-    strtok(uri, ".");
-    extension = strtok(NULL, " ");
+    return s;
+}
+
+char* setMimeType(char *uri){
+
+    char *extension = strrchr(uri , '.');
+
+    if (extension == NULL) {
+        return DEFAULT_MIME_TYPE;
+    }
+    extension++;
+
+    strlower(extension);
+
     printf("extension (%s)\n", extension);
 
     if (strcmp(extension, "html") == 0)
     {
-        strcpy(mimeType, "text/html");
+        return "text/html";
     }
     if (strcmp(extension, "css") == 0)
     {
-        strcpy(mimeType, "text/css");
+        return "text/css";
     }
     if (strcmp(extension, "txt") == 0)
     {
-        strcpy(mimeType, "text/plain");
+        return "text/plain";
     }
     if (strcmp(extension, "js") == 0)
     {
-        strcpy(mimeType, "text/javascript");
+        return "text/javascript";
     }
     if (strcmp(extension, "jpg") == 0)
     {
-        strcpy(mimeType, "image/jpeg");
+        return "image/jpeg";
     }
     if (strcmp(extension, "png") == 0)
     {
-        strcpy(mimeType, "image/png");
+        return "image/png";
     }
     if (strcmp(extension, "gif") == 0)
     {
-        strcpy(mimeType, "image/gif");
+        return "image/gif";
     }
-    return mimeType ;
+    return DEFAULT_MIME_TYPE;
 }
 
 char* setFilePath(char *root, char *uri)
@@ -64,6 +79,15 @@ char* setFilePath(char *root, char *uri)
     return filePath;
 }
 
+struct tm* setLastModified(char *uri){
+    struct stat attr;
+    struct tm *lmtime;
+    stat(uri, &attr);
+    lmtime = ctime(&(attr.st_mtime));
+
+    return lmtime;
+}
+
 void respond_HEAD(int connFd, char *root, char *uri){
     char buf[MAXBUF];
     char *mimeType = setMimeType(uri);
@@ -71,21 +95,23 @@ void respond_HEAD(int connFd, char *root, char *uri){
     struct stat sb;
 
     printf("uri (%s)\n", uri);
-    // strcp(mimeType, setMimeType(uri));
-    // mimeType = setMimeType(uri, mimeType);
     printf("mimeType (%s)\n", mimeType);
 
     // Get current time for the HTTP header
    time_t t1 = time(NULL);
    struct tm *ltime = localtime(&t1);
-    
-    // sprintf(newBuf, "%s%s", filePath, uri);
-    // printf("path (%s)\n",newBuf);
-    // strcp(filePath, setFilePath(root, uri));
+
+//    struct stat attr;
+//    struct tm *lmtime;
+//    stat(uri, &attr);
+//    lmtime = ctime(&(attr.st_mtime));
+
+    struct tm *lmtime = setLastModified(uri);
     int inputFd = open(filePath, O_RDONLY);
     if (inputFd == -1)
     {
         printf("404 File not found\n");
+        return;
     }
 
     fstat(inputFd, &sb);
@@ -98,13 +124,13 @@ void respond_HEAD(int connFd, char *root, char *uri){
             "Server: ICWS\r\n"
             "Connection: close\r\n"
             "Content-length: %lu\r\n"
-            "Content-type: %s\r\n\r\n",
-            asctime(ltime), sizeOfFile, mimeType);
+            "Content-type: %s\r\n"
+            "Last-Modified: %s\r\n",
+            asctime(ltime), sizeOfFile, mimeType, lmtime);
     printf("buf (%s)\n", buf);
     write_all(connFd, buf, strlen(buf));
 
     close(inputFd);
-    free(mimeType);
 }
 
 void respond_GET(int connFd, char *root, char *uri)
@@ -115,21 +141,19 @@ void respond_GET(int connFd, char *root, char *uri)
     struct stat sb;
     
     printf("uri (%s)\n",uri);
-    // strcp(mimeType,setMimeType(uri));
     printf("mimeType (%s)\n",mimeType);
 
     // Get current time for the HTTP header
    time_t t1 = time(NULL);
    struct tm *ltime = localtime(&t1);
 
-    // char filePath[MAXBUF];
-    // sprintf(newBuf, "%s%s", filePath, uri);
-    // printf("path (%s)\n",newBuf);
-    // strcp(filePath, setFilePath(root, uri));
+   struct tm *lmtime = setLastModified(uri);
+
     int inputFd = open(filePath, O_RDONLY);
     if (inputFd == -1)
     {
         printf("404 File not found\n");
+        return;
     }
     
     fstat(inputFd, &sb);
@@ -142,8 +166,9 @@ void respond_GET(int connFd, char *root, char *uri)
             "Server: ICWS\r\n"
             "Connection: close\r\n"
             "Content-length: %lu\r\n"
-            "Content-type: %s\r\n\r\n",
-            asctime(ltime), sizeOfFile, mimeType);
+            "Content-type: %s\r\n\r\n"
+            "Last-Modified: %s\r\n",
+            asctime(ltime), sizeOfFile, mimeType,lmtime);
     printf("buf (%s)\n", buf);
     write_all(connFd, buf, strlen(buf));
 
@@ -151,39 +176,41 @@ void respond_GET(int connFd, char *root, char *uri)
     ssize_t numRead;
     while ((numRead = read(inputFd, content, MAXBUF)) > 0)
     {
-        write_all(connFd, content, numRead);
+        write_all(connFd, content, MAXBUF);
     }
     close(inputFd);
 }
 
 void serve_http(int connFd, char *root)
 {
-    char buf[MAXBUF], line[MAXBUF];
-    int readPerLine = 0, bufSize = 0;
+    char buf[MAXBUF], line[MAXBUF], buff[MAXBUF];
+    int readPerLine = 0, bufSize = 0, bytesRead=0;
     printf("path (%s)\n", root);
 
-    while ((readPerLine = read_line(connFd, line, MAXBUF))> 0)
+    while ((bytesRead = read_line(connFd, line, MAXBUF)) != 0)
     {
-        bufSize += readPerLine;
-        // printf(" bufSIZE : %d\n", bufSize);
-        strcat(buf, line);
+        printf("byteReadPerTime: %d\n" , bytesRead);
+        bufSize += bytesRead;
+        strcat(buf,line);
         if (!strcmp(line, "\r\n"))
             break;
     }
 
-    if(!readPerLine)
+    if(!bytesRead)
         return ;
 
     printf("buf (%s)\n", buf);
     printf("bufSize : %d\n", bufSize);
+    printf("bytesRead : %d\n", bytesRead);
 
     Request *request = parse(buf, bufSize, connFd);
+    strcpy(buf,"");
 
-    if(strcasecmp(request->http_version, "HTTP/1.1") != 0){
+    if(strcasecmp(request->http_version, "HTTP/1.1") != 0)
+    {
         printf("505: Bad Version Number");
     }
-
-    if (strcasecmp(request->http_method, "GET") == 0 &&
+    else if (strcasecmp(request->http_method, "GET") == 0 &&
         request->http_uri[0] == '/')
     {
         printf("LOG: GET \n");
