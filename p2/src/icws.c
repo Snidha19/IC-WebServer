@@ -9,12 +9,19 @@
 #include<string.h>
 #include<unistd.h>
 #include<time.h>
+#include<pthread.h>
+#include<stdbool.h>
 #include "pcsa_net.h"
 #include "parse.h"
+#include "myqueue.h"
 
 #define MAXBUF 8192
 
 #define DEFAULT_MIME_TYPE "application/octet-stream"
+
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutex_p = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t conditional_var = PTHREAD_COND_INITIALIZER;
 
 typedef struct sockaddr SA;
 
@@ -223,12 +230,82 @@ void serve_http(int connFd, char *root)
     }
 }
 
+void serve_http2(int *p_connFd, char  *root)
+{
+    int connFd = *p_connFd;
+    printf("connFD : %d\n" , connFd);
+    char buf[MAXBUF], line[MAXBUF];
+    int bufSize = 0, bytesRead=0;
+    printf("path (%s)\n", root);
+
+    while ((bytesRead = read_line(connFd, line, MAXBUF)) > 0)
+    {
+        printf("byteReadPerTime: %d\n" , bytesRead);
+        bufSize += bytesRead;
+        strcat(buf,line);
+        if (!strcmp(line, "\r\n"))
+            break;
+    }
+
+    if(!bytesRead)
+        return ;
+
+    //bytesRead = read(connFd, line, MAXBUF);
+
+    printf("buf (%s)\n", buf);
+    printf("bufSize : %d\n", bufSize);
+    printf("bytesRead : %d\n", bytesRead);
+
+    pthread_mutex_lock(&mutex_p);
+    Request *request = parse(buf, bufSize, connFd);
+    pthread_mutex_unlock(&mutex_p);
+    strcpy(buf,"");
+
+    if(strcasecmp(request->http_version, "HTTP/1.1") != 0)
+    {
+        printf("505: Bad Version Number");
+        return ;
+    }
+    else if (strcasecmp(request->http_method, "GET") == 0 &&
+        request->http_uri[0] == '/')
+    {
+        printf("LOG: GET \n");
+        respond_GET(connFd, root, request->http_uri);
+    }
+    else if (strcasecmp(request->http_method, "HEAD") == 0 &&
+        request->http_uri[0] == '/')
+    {
+        printf("LOG: HEAD \n");
+        respond_HEAD(connFd, root, request->http_uri);
+    }
+    else
+    {
+        printf("501: Unsupported Methods\n");
+    }
+}
+
+void* thread_function(void* arg){
+    while (true) {
+        t_arg *args;
+        pthread_mutex_lock(&mutex);
+        pthread_cond_wait(&conditional_var,&mutex);
+        args = dequeue();
+        pthread_mutex_unlock(&mutex);
+        if (args->connFd != NULL){
+            serve_http2(args->connFd, args->root);
+        }
+    }
+
+}
+
+
 int main(int argc, char* argv[]) {
+    printf("argc: %d\n", argc);
     //cmd line arg
     /* ./icws --port <listenPort> --root <wwwRoot> */
 
     // flags to check if port and root exist
-    int portFlag = 0,rootFlag = 0;
+    int portFlag = 0,rootFlag = 0,threadFlag=0;
 
     if (strcmp("--port", argv[1]) == 0){
         portFlag = 1;
@@ -236,7 +313,22 @@ int main(int argc, char* argv[]) {
     // if (strcmp("--root", argv[3]) == 0){
     //     rootFlag = 1;
     // }
+    
 
+    if (argc > 5){
+        if (strcmp("--numThreads", argv[5]) == 0){
+        threadFlag = 1;
+        }
+        if(threadFlag != 0){
+            int num = atoi(argv[6]);
+            //printf(" num threads : %d\n", num);
+            pthread_t thread_pool[num];
+            for (int i=0; i<num; i++){
+                pthread_create(&thread_pool[i], NULL, thread_function, NULL);
+            }
+        }
+    }
+    
     if(portFlag != 0){
         int listenFd = open_listenfd(argv[2]);
         for (;;) {
@@ -257,11 +349,31 @@ int main(int argc, char* argv[]) {
             else
                 printf("Connection from ?UNKNOWN?\n");
             
-            serve_http(connFd, argv[4]);
+            
+            
+            
+            //creating threads 
+            // pthread_t t;
+            if(threadFlag != 0){
+            int *pclient = malloc(sizeof(int));
+            *pclient = connFd;
+            pthread_mutex_lock(&mutex);
+            enqueue(pclient, argv[4]);
+            pthread_cond_signal(&conditional_var);
+            pthread_mutex_unlock(&mutex);
+            }else{
+                serve_http(connFd, argv[4]);
+            }
+            
+            // serve_http(connFd, argv[4]);
+
             close(connFd);
         }
 
     }
-    
+    if (threadFlag != 0){
+    pthread_mutex_destroy(&mutex);
+    pthread_mutex_destroy(&mutex_p);
+    }
     return 0;
 }

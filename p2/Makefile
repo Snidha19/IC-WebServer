@@ -3,7 +3,7 @@ OBJ_DIR := obj
 # all src files
 SRC := $(wildcard $(SRC_DIR)/*.c)
 # all objects
-OBJ := $(OBJ_DIR)/y.tab.o $(OBJ_DIR)/lex.yy.o $(OBJ_DIR)/parse.o $(OBJ_DIR)/icws.o $(OBJ_DIR)/pcsa_net.o
+OBJ := $(OBJ_DIR)/y.tab.o $(OBJ_DIR)/lex.yy.o $(OBJ_DIR)/parse.o $(OBJ_DIR)/icws.o $(OBJ_DIR)/pcsa_net.o $(OBJ_DIR)/myqueue.o
 # all binaries
 BIN := icws
 # C compiler
@@ -21,9 +21,12 @@ all : icws
 # 	$(CC) $^ -o $@
 
 icws: $(OBJ)
-	$(CC) $^ -o $@
+	$(CC) $^ -pthread -o $@
 
 pcsa_net: $(OBJ)
+	$(CC) $^ -o $@
+
+myqueue: $(OBJ)
 	$(CC) $^ -o $@
 
 $(SRC_DIR)/lex.yy.c: $(SRC_DIR)/lexer.l
