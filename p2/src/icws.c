@@ -1,5 +1,5 @@
 #include<sys/types.h>
-#include <ctype.h>
+#include<ctype.h>
 #include<sys/socket.h>
 #include<sys/stat.h>
 #include<netdb.h>
@@ -108,11 +108,6 @@ void respond_HEAD(int connFd, char *root, char *uri){
    time_t t1 = time(NULL);
    struct tm *ltime = localtime(&t1);
 
-//    struct stat attr;
-//    struct tm *lmtime;
-//    stat(uri, &attr);
-//    lmtime = ctime(&(attr.st_mtime));
-
     struct tm *lmtime = setLastModified(uri);
     int inputFd = open(filePath, O_RDONLY);
     if (inputFd == -1)
@@ -175,7 +170,7 @@ void respond_GET(int connFd, char *root, char *uri)
             "Content-length: %lu\r\n"
             "Content-type: %s\r\n"
             "Last-Modified: %s\r\n",
-            asctime(ltime), sizeOfFile, mimeType,lmtime);
+            asctime(ltime), sizeOfFile, mimeType, lmtime);
     printf("buf (%s)\n", buf);
     write_all(connFd, buf, strlen(buf));
 
@@ -194,9 +189,8 @@ void serve_http(int connFd, char *root)
     int bufSize = 0, bytesRead=0;
     printf("path (%s)\n", root);
 
-    while ((bytesRead = read_line(connFd, line, MAXBUF)) != 0)
+    while ((bytesRead = read_line(connFd, line, MAXBUF)) > 0)
     {
-        printf("byteReadPerTime: %d\n" , bytesRead);
         bufSize += bytesRead;
         strcat(buf,line);
         if (!strcmp(line, "\r\n"))
@@ -216,7 +210,7 @@ void serve_http(int connFd, char *root)
     if(strcasecmp(request->http_version, "HTTP/1.1") != 0)
     {
         printf("505: Bad Version Number");
-        return;
+        return ;
     }
     else if (strcasecmp(request->http_method, "GET") == 0 &&
         request->http_uri[0] == '/')

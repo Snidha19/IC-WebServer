@@ -1335,7 +1335,7 @@ yyreduce:
     strcpy(parsing_request->headers[parsing_request->header_count].header_name, (yyvsp[-6].str));
 	strcpy(parsing_request->headers[parsing_request->header_count].header_value, (yyvsp[-2].str));
 	parsing_request->header_count++;
-	parsing_request->headers = realloc(parsing_request->headers, ((sizeof(Request_header))*(parsing_request->header_count+1)));
+	parsing_request->headers = realloc(parsing_request->headers, (sizeof(Request_header)*(parsing_request->header_count+1)));
 }
 #line 1341 "y.tab.c"
     break;
@@ -1556,7 +1556,7 @@ yyreturn:
   return yyresult;
 }
 
-#line 240 "src/parser.y"
+#line 230 "src/parser.y"
 
 
 /* C code */
