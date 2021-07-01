@@ -173,7 +173,7 @@ void respond_GET(int connFd, char *root, char *uri)
             "Server: ICWS\r\n"
             "Connection: close\r\n"
             "Content-length: %lu\r\n"
-            "Content-type: %s\r\n\r\n"
+            "Content-type: %s\r\n"
             "Last-Modified: %s\r\n",
             asctime(ltime), sizeOfFile, mimeType,lmtime);
     printf("buf (%s)\n", buf);
